@@ -13,6 +13,7 @@ library(anytime)
 library(lubridate)
 
 library(quanteda)
+#library(spacyr)
 #library(quanteda.textplots)
 #library(tidytext)
 #library(topicmodels)
@@ -20,6 +21,10 @@ library(wordcloud)
 library(wordcloud2)
 library(RColorBrewer)
 ```
+
+---
+
+# Setup
 
 ---
 
@@ -44,7 +49,7 @@ glimpse(course_df)
 ```
 
 ```{r, echo=FALSE, eval=FALSE}
-course_univ_df_tmp <-
+msi_by_program <-
   univ_df %>%
   right_join(course_df, by = "instname") %>%
   rename(inst_name = instname,
@@ -53,26 +58,257 @@ course_univ_df_tmp <-
 ```
 
 ```{r, echo=FALSE, eval=FALSE}
-write_csv(course_univ_df_tmp, "_tmp_course_univ_df.csv")
+rm(course_df)
+rm(univ_df)
+glimpse(msi_by_program)
+```
+
+```{r, echo=FALSE, eval=FALSE}
+n_instituions <- msi_by_program %>% distinct(inst_name) %>% nrow()
+n_programs <- msi_by_program %>% distinct(inst_name, program_area, program_level) %>% nrow()
+n_departments <- msi_by_program %>% distinct(inst_name, department) %>% nrow()
+n_colleges <- msi_by_program %>% distinct(inst_name, college, school) %>% nrow()
 ```
 
 
+---
 
-
+# Analysis
 
 ---
 
-## Data
+## Analyze by Level
 
----
-
-```{r, message=FALSE}
-msi_by_program <- read_csv("msi-computing-by-program.csv")
+```{r}
+msi_by_program %>% count(program_level, sort = TRUE) %>% head(20)
 ```
 
 ```{r}
-glimpse(msi_by_program)
+msi_by_program %>% count(program_area, sort = TRUE) %>% head(20)
 ```
+
+```{r, echo=FALSE, eval=FALSE}
+#spacyr::spacy_install()
+spacy_initialize(model = "en_core_web_sm")
+```
+
+```{r, echo=FALSE}
+singularize <- function (x) {
+  spacyr::spacy_parse(x, tag = TRUE) %>%
+    mutate(token = ifelse(tag == "NNS",
+                          lemma,
+                          token)
+           ) %>%
+    group_by(doc_id) %>% 
+    summarize(text = paste0(token, collapse = " ")) %>%
+    quanteda::corpus()
+}
+```
+
+```{r, echo=FALSE} 
+my_extra_stopwords <-
+  c("NA", "n/a", "just", "also", "can", "like", "etc", "lot", "many", "much", 
+    "even", "sure", "concentration", "specialization", "department", "division",
+    "study", "area", "college", "school"
+  )
+
+my_compound_words <- 
+  c("computer science", "information science", "information sciences",
+    "data science", "physical sciences",
+    "natural sciences", "behavioral sciences", "mathematical sciences", 
+    "public administration", "applied science", "liberal arts", "media arts",
+    "information technology", "information systems", 
+    "electrical engineering", "computer engineering", "computer system", 
+    "computer security", "information security", "computer network",
+    "networked system", "natural language processing", "artificial intelligence",
+    "information assurance", "data analytics", "learning analytics", 
+    "cyber technology", "big data", "machine learning", "network security"
+  )
+```
+
+### Top Program Terms
+
+```{r, echo=FALSE} 
+dfm_program <-
+  msi_by_program %>%
+  pull(program_area) %>% 
+  quanteda::corpus() %>%
+  singularize() %>%
+  quanteda::tokens(
+    remove_separators = TRUE,
+    remove_punct = TRUE,
+    remove_symbols = TRUE,
+    remove_numbers = TRUE,
+    remove_url = TRUE) %>%
+  quanteda::tokens_select(min_nchar=2L) %>% #Filter: at least 2 letters 
+  quanteda::tokens_compound(phrase(my_compound_words)) %>%
+  quanteda::dfm(tolower = TRUE) %>% 
+  quanteda::dfm_remove(c(my_extra_stopwords,
+                 quanteda::stopwords("english")))
+
+top_terms_program <- 
+  quanteda::topfeatures(dfm_program, n = 500, scheme = "count") %>%
+  as.list() %>%
+  as_tibble() %>%
+  pivot_longer(cols = everything(), 
+               names_to = "term", 
+               values_to = "n") %>%
+  mutate(p = round(100*n/n_programs, 2))
+head(top_terms_program, 10)
+#View(top_terms_program)
+```
+
+### Top Department Terms
+
+```{r, echo=FALSE} 
+dfm_dept <-
+  msi_by_program %>%
+  distinct(inst_name, college, school, .keep_all = TRUE) %>%
+  pull(department) %>% 
+  quanteda::corpus() %>%
+  singularize() %>%
+  quanteda::tokens(
+    remove_separators = TRUE,
+    remove_punct = TRUE,
+    remove_symbols = TRUE,
+    remove_numbers = TRUE,
+    remove_url = TRUE) %>%
+  quanteda::tokens_select(min_nchar=2L) %>% #Filter: at least 3 letters 
+  quanteda::tokens_compound(phrase(my_compound_words)) %>%
+  quanteda::dfm(tolower = TRUE) %>% 
+  quanteda::dfm_remove(c(my_extra_stopwords,
+                 quanteda::stopwords("english")))
+
+top_terms_dept <- 
+  quanteda::topfeatures(dfm_dept, n = 500, scheme = "count") %>%
+  as.list() %>%
+  as_tibble() %>%
+  pivot_longer(cols = everything(), 
+               names_to = "term", 
+               values_to = "n") %>%
+  mutate(p = round(100*n/n_departments, 2))
+head(top_terms_dept, 10)
+#View(top_terms_dept)
+```
+
+### Top College/School Terms
+
+```{r, echo=FALSE} 
+dfm_college <-
+  msi_by_program %>%
+  distinct(inst_name, department, .keep_all = TRUE) %>%
+  unite("college_school", college:school, sep = " ") %>%
+  pull(college_school) %>%
+  quanteda::corpus() %>%
+  singularize() %>%
+  quanteda::tokens(
+    remove_separators = TRUE,
+    remove_punct = TRUE,
+    remove_symbols = TRUE,
+    remove_numbers = TRUE,
+    remove_url = TRUE) %>%
+  quanteda::tokens_select(min_nchar=2L) %>% #Filter: at least 3 letters 
+  quanteda::tokens_compound(phrase(my_compound_words)) %>%
+  quanteda::dfm(tolower = TRUE) %>% 
+  quanteda::dfm_remove(c(my_extra_stopwords,
+                 quanteda::stopwords("english")))
+
+top_terms_college <- 
+  quanteda::topfeatures(dfm_college, n = 500, scheme = "count") %>%
+  as.list() %>%
+  as_tibble() %>%
+  pivot_longer(cols = everything(), 
+               names_to = "term", 
+               values_to = "n")  %>%
+  mutate(p = round(100*n/n_colleges, 2))
+head(top_terms_college, 10)
+#View(top_terms_college)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r, warning=FALSE, echo=FALSE} 
+set.seed(082523)  # for reproducibility 
+wordcloud(words = dfm_table_terms_overall$term, 
+          freq = dfm_table_terms_overall$count, 
+          min.freq = 5,
+          max.words = 100, 
+          random.order = FALSE, 
+          rot.per = 0.35,
+          colors = brewer.pal(8, "Dark2"),
+          scale = c(3, 0.25)
+)
+```
+
+```{r, echo=FALSE, eval=FALSE} 
+set.seed(082523)  # for reproducibility 
+wordcloud2(data = dfm_table_terms_overall,
+           size = 1.0, 
+           color = "random-dark"
+)
+```
+
+### Terms by Program Count 
+
+```{r, echo=FALSE}
+dfm_table_terms_by_doc <- 
+  quanteda::topfeatures(dfm_terms, n = 500, scheme = "docfreq") %>%
+  as.list() %>%
+  as_tibble() %>%
+  pivot_longer(cols = everything(), 
+               names_to = "term", 
+               values_to = "count")
+head(dfm_table_terms_by_doc, 10)
+```
+
+```{r, warning=FALSE, echo=FALSE} 
+set.seed(082523)  # for reproducibility 
+wordcloud(words = dfm_table_terms_by_doc$term, 
+          freq = dfm_table_terms_by_doc$count, 
+          min.freq = 5,
+          max.words = 100, 
+          random.order = FALSE, 
+          rot.per = 0.35,
+          colors = brewer.pal(8, "Dark2"),
+          scale = c(2, 0.25)
+)
+```
+
+```{r, echo=FALSE, eval=FALSE} 
+wordcloud2(data = dfm_table_terms_by_doc,
+           size = 1.0, 
+           color = "random-dark"
+)
+```
+
+```{r, echo=FALSE, eval=FALSE}
+tfidf_all <- 
+  quanteda::dfm_tfidf(dfm_terms) %>%
+  quanteda::convert(to = "data.frame")
+colnames(tfidf_all)[1] = "course"
+```
+
+
+
+
+
+
+
+---
+
+## Analyze Course Titles
 
 ```{r}
 msi_by_course <-
@@ -83,20 +319,6 @@ msi_by_course <-
 
 ```{r}
 glimpse(msi_by_course)
-```
-
-```{r, eval=FALSE}
-write_csv(msi_by_course, "msi-computing-by-course.csv")
-```
-
----
-
-## Analysis
-
----
-
-```{r, message=FALSE}
-msi_by_course <- read_csv("msi-computing-by-course.csv")
 ```
 
 ```{r}
@@ -123,9 +345,21 @@ my_extra_stopwords <-
     "even", "sure"
   )
 
+my_extra_keywords <-
+  c("computer science", "information science", "data science", "physical science",
+    "natural science", "behavioral science", "mathematical science", 
+    "public administration", "applied science", "liberal arts", 
+    "information technology", "information system", 
+    "electrical engineering", "computer engineering", "computer system", 
+    "computer security", "information security", "computer network",
+    "networked system", "natural language processing", "artificial intelligence",
+    "information assurance", "data analytics", "learning analytics", 
+    "cyber technology", "big data", "machine learning", "network security"
+)
+
 corpus_terms <-
   msi_by_course %>%
-  plyr::ddply(.(ope_id, area_id, level_id), 
+  plyr::ddply(.(ope_id, level_id), 
         summarize, 
         course_titles = paste(course_titles, collapse=" ")) 
 
