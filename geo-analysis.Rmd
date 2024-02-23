@@ -1,0 +1,129 @@
+---
+title: "Analysis of Geographic Locations of MSI Computing Programs"
+author: "Bret Staudt Willet, Annie Wofford, Lara Perez-Felkner, & Chantra Nhien"
+date: "2024-02-22"
+output: html_document
+---
+
+```{r setup, message=FALSE, warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(plyr)
+library(tidyverse)
+library(anytime)
+library(lubridate)
+
+library(sf)
+library(ggmap)
+library(usmap)
+```
+
+---
+
+# Setup
+
+---
+
+```{r, message=FALSE, echo=FALSE, eval=FALSE}
+state_regions <- 
+  read_csv("state-regions.csv")
+univ_df0 <- 
+  read_csv("msi-university-list.csv") %>%
+  select(instname, opeid, stabbr, geolocation) %>%
+  rename(ope_id = opeid,
+         state_id = stabbr)
+msi <- 
+  read_csv("msi-data-project.csv") %>%
+  distinct(instname, .keep_all = TRUE) %>%
+  filter(instname %in% univ_df0$instname)
+univ_df <-
+  univ_df0 %>%
+  left_join(msi, by = "instname") %>%
+  mutate(msi_type = str_replace_all(fundedtxt, "Currently funded", ""),
+         msi_type = ifelse(grepl("HBCU", msi_type),
+                           "HBCU",
+                           ifelse(grepl("HSI", msi_type),
+                                  "HSI",
+                                  "Other")
+         )
+  )
+```
+
+```{r, echo=FALSE, eval=FALSE}
+glimpse(univ_df)
+```
+
+```{r, eval=FALSE}
+ggmap::register_google(key = Sys.getenv("GOOGLE_API_KEY"))
+ggmap::has_google_key()
+```
+
+```{r, eval=FALSE}
+coords <- 
+  univ_df %>% 
+  distinct(instname, .keep_all = TRUE) %>%
+  ggmap::mutate_geocode(geolocation)
+```
+
+```{r}
+state_regions_formatted <-
+  state_regions %>%
+  mutate(region = ifelse(region == "northeast", 
+                         "Northeast",
+                         ifelse(region == "midest", 
+                                "Midwest",
+                                ifelse(region == "south-atlantic", 
+                                       "South: Atlantic Region",
+                                       ifelse(region == "south-central-east", 
+                                       "South: East Region",
+                                       ifelse(region == "south-central-west", 
+                                       "South: West Region",
+                                       ifelse(region == "west-mountain", 
+                                       "West: Mountain Region",
+                                       ifelse(region == "west-pacific", 
+                                       "West: Pacific Region",
+                                       "Puerto Rico")
+                                       )))))
+         )) %>%
+  rename(Region = region)
+```
+
+```{r}
+coords_transformed <- 
+  usmap_transform(coords) %>%
+  rename(`MSI Type` = msi_type)
+```
+
+```{r}
+plot_usmap(data = state_regions_formatted, 
+           values = "Region", 
+           color = "gray80" ) + 
+  geom_sf(
+    data = coords_transformed,
+    size = 2.5,
+    color = "black",
+    stroke = 1.2,
+    alpha = 0.5,
+    aes(shape = `MSI Type`)
+  ) +
+  scale_shape_manual(values = c(0, 2, 1)) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text.x = element_blank(),
+        strip.text.y = element_blank(),
+        legend.position = 'bottom',
+        legend.box = 'vertical',
+        legend.background = element_blank(),
+        legend.box.background = element_rect(size = 0.3),
+        legend.title=element_text(size = 14, family = 'serif'), 
+        legend.text=element_text(size = 10, family = 'serif')
+  )
+```
+
+```{r}
+ggsave(file="output/msi-map.png", width=8, height=4.5)
+```
