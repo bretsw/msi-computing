@@ -7,19 +7,11 @@ output: html_document
 
 ```{r setup, message=FALSE, warning=FALSE, echo=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(plyr)
 library(tidyverse)
-library(anytime)
-library(lubridate)
-
 library(quanteda)
-#library(spacyr)
-#library(quanteda.textplots)
-#library(tidytext)
-#library(topicmodels)
-library(wordcloud)
-library(wordcloud2)
-library(RColorBrewer)
+library(spacyr)
+library(quanteda.textplots)
+library(viridis)
 ```
 
 ---
@@ -64,7 +56,7 @@ glimpse(msi_by_program)
 ```
 
 ```{r, echo=FALSE, eval=FALSE}
-n_instituions <- msi_by_program %>% distinct(inst_name) %>% nrow()
+n_institutions <- msi_by_program %>% distinct(inst_name) %>% nrow()
 n_programs <- msi_by_program %>% distinct(inst_name, program_area, program_level) %>% nrow()
 n_departments <- msi_by_program %>% distinct(inst_name, department) %>% nrow()
 n_colleges <- msi_by_program %>% distinct(inst_name, college, school) %>% nrow()
@@ -89,7 +81,7 @@ msi_by_program %>% count(program_area, sort = TRUE) %>% head(20)
 
 ```{r, echo=FALSE, eval=FALSE}
 #spacyr::spacy_install()
-spacy_initialize(model = "en_core_web_sm")
+spacyr::spacy_initialize(model = "en_core_web_sm")
 ```
 
 ```{r, echo=FALSE}
@@ -227,229 +219,55 @@ head(top_terms_college, 10)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-```{r, warning=FALSE, echo=FALSE} 
-set.seed(082523)  # for reproducibility 
-wordcloud(words = dfm_table_terms_overall$term, 
-          freq = dfm_table_terms_overall$count, 
-          min.freq = 5,
-          max.words = 100, 
-          random.order = FALSE, 
-          rot.per = 0.35,
-          colors = brewer.pal(8, "Dark2"),
-          scale = c(3, 0.25)
+```{r, echo=FALSE, eval=FALSE} 
+png('output/terms-program.png', width = 2400, height = 2400)
+set.seed(022324)  # for reproducibility 
+quanteda.textplots::textplot_wordcloud(dfm_program,
+                                       min_size = 1.5,
+                                       max_size = 4.5,
+                                       min_count = 1,
+                                       rotation = .25,
+                                       color = viridis::viridis_pal(option = "viridis",
+                                                                    begin = 0.3,
+                                                                    end = 0.8,
+                                                                    direction = -1
+                                                                    )(12)
 )
+dev.off()
+```
+
+
+
+```{r, echo=FALSE, eval=FALSE} 
+png('output/terms-department.png', width = 2400, height = 2400)
+set.seed(022324)  # for reproducibility 
+quanteda.textplots::textplot_wordcloud(dfm_dept, 
+                                       min_size = 1,
+                                       max_size = 4.5,
+                                       min_count = 1,
+                                       rotation = .25,
+                                       color = viridis::viridis_pal(option = "viridis",
+                                                                    begin = 0.3,
+                                                                    end = 0.8,
+                                                                    direction = -1
+                                                                    )(12)
+)
+dev.off()
 ```
 
 ```{r, echo=FALSE, eval=FALSE} 
-set.seed(082523)  # for reproducibility 
-wordcloud2(data = dfm_table_terms_overall,
-           size = 1.0, 
-           color = "random-dark"
+png('output/terms-college.png', width = 2400, height = 2400)
+set.seed(022324)  # for reproducibility 
+quanteda.textplots::textplot_wordcloud(dfm_college, 
+                                       min_size = 1,
+                                       max_size = 4.5,
+                                       min_count = 1,
+                                       rotation = .25,
+                                       color = viridis::viridis_pal(option = "viridis",
+                                                                    begin = 0.3,
+                                                                    end = 0.8,
+                                                                    direction = -1
+                                                                    )(12)
 )
-```
-
-### Terms by Program Count 
-
-```{r, echo=FALSE}
-dfm_table_terms_by_doc <- 
-  quanteda::topfeatures(dfm_terms, n = 500, scheme = "docfreq") %>%
-  as.list() %>%
-  as_tibble() %>%
-  pivot_longer(cols = everything(), 
-               names_to = "term", 
-               values_to = "count")
-head(dfm_table_terms_by_doc, 10)
-```
-
-```{r, warning=FALSE, echo=FALSE} 
-set.seed(082523)  # for reproducibility 
-wordcloud(words = dfm_table_terms_by_doc$term, 
-          freq = dfm_table_terms_by_doc$count, 
-          min.freq = 5,
-          max.words = 100, 
-          random.order = FALSE, 
-          rot.per = 0.35,
-          colors = brewer.pal(8, "Dark2"),
-          scale = c(2, 0.25)
-)
-```
-
-```{r, echo=FALSE, eval=FALSE} 
-wordcloud2(data = dfm_table_terms_by_doc,
-           size = 1.0, 
-           color = "random-dark"
-)
-```
-
-```{r, echo=FALSE, eval=FALSE}
-tfidf_all <- 
-  quanteda::dfm_tfidf(dfm_terms) %>%
-  quanteda::convert(to = "data.frame")
-colnames(tfidf_all)[1] = "course"
-```
-
-
-
-
-
-
-
----
-
-## Analyze Course Titles
-
-```{r}
-msi_by_course <-
-  msi_by_program %>%
-  mutate(course_titles = str_split(course_titles, "; ")) %>%
-  unnest(course_titles)
-```
-
-```{r}
-glimpse(msi_by_course)
-```
-
-```{r}
-msi_by_course %>% count(course_titles, sort = TRUE) %>% head(20)
-```
-
-```{r, echo=FALSE}
-course_terms <- 
-  msi_by_course$course_titles %>% 
-  tolower() %>%
-  str_c(collapse = " ") %>%
-  str_split(" ")
-terms_table <- 
-  table(course_terms, dnn = "term") %>% 
-  as.data.frame() %>% 
-  dplyr::rename(n = Freq) %>%
-  arrange(desc(n))
-head(terms_table, 10)
-```
-
-```{r, echo=FALSE} 
-my_extra_stopwords <-
-  c("NA", "just", "also", "can", "like", "etc", "lot", "many", "much", 
-    "even", "sure"
-  )
-
-my_extra_keywords <-
-  c("computer science", "information science", "data science", "physical science",
-    "natural science", "behavioral science", "mathematical science", 
-    "public administration", "applied science", "liberal arts", 
-    "information technology", "information system", 
-    "electrical engineering", "computer engineering", "computer system", 
-    "computer security", "information security", "computer network",
-    "networked system", "natural language processing", "artificial intelligence",
-    "information assurance", "data analytics", "learning analytics", 
-    "cyber technology", "big data", "machine learning", "network security"
-)
-
-corpus_terms <-
-  msi_by_course %>%
-  plyr::ddply(.(ope_id, level_id), 
-        summarize, 
-        course_titles = paste(course_titles, collapse=" ")) 
-
-dfm_terms <-
-  corpus_terms %>%
-  select(course_titles) %>% 
-  quanteda::corpus(text_field = 'course_titles') %>%
-  quanteda::tokens(
-    remove_separators = TRUE,
-    remove_punct = TRUE,
-    remove_symbols = TRUE,
-    remove_numbers = TRUE,
-    remove_url = TRUE) %>%
-  # quanteda::tokens_wordstem(language = quanteda_options("language_stemmer")) %>%
-  quanteda::tokens_select(min_nchar=3L) %>% #Filter: at least 3 letters 
-  quanteda::dfm(tolower = TRUE) %>%
-  quanteda::dfm_remove(c(my_extra_stopwords,
-                 quanteda::stopwords("english")))
-```
-
-### Terms by Total Count
-
-```{r, echo=FALSE} 
-dfm_table_terms_overall <- 
-  quanteda::topfeatures(dfm_terms, n = 500, scheme = "count") %>%
-  as.list() %>%
-  as_tibble() %>%
-  pivot_longer(cols = everything(), 
-               names_to = "term", 
-               values_to = "count")
-head(dfm_table_terms_overall, 10)
-```
-
-```{r, warning=FALSE, echo=FALSE} 
-set.seed(082523)  # for reproducibility 
-wordcloud(words = dfm_table_terms_overall$term, 
-          freq = dfm_table_terms_overall$count, 
-          min.freq = 5,
-          max.words = 100, 
-          random.order = FALSE, 
-          rot.per = 0.35,
-          colors = brewer.pal(8, "Dark2"),
-          scale = c(3, 0.25)
-)
-```
-
-```{r, echo=FALSE, eval=FALSE} 
-set.seed(082523)  # for reproducibility 
-wordcloud2(data = dfm_table_terms_overall,
-           size = 1.0, 
-           color = "random-dark"
-)
-```
-
-### Terms by Program Count 
-
-```{r, echo=FALSE}
-dfm_table_terms_by_doc <- 
-  quanteda::topfeatures(dfm_terms, n = 500, scheme = "docfreq") %>%
-  as.list() %>%
-  as_tibble() %>%
-  pivot_longer(cols = everything(), 
-               names_to = "term", 
-               values_to = "count")
-head(dfm_table_terms_by_doc, 10)
-```
-
-```{r, warning=FALSE, echo=FALSE} 
-set.seed(082523)  # for reproducibility 
-wordcloud(words = dfm_table_terms_by_doc$term, 
-          freq = dfm_table_terms_by_doc$count, 
-          min.freq = 5,
-          max.words = 100, 
-          random.order = FALSE, 
-          rot.per = 0.35,
-          colors = brewer.pal(8, "Dark2"),
-          scale = c(2, 0.25)
-)
-```
-
-```{r, echo=FALSE, eval=FALSE} 
-wordcloud2(data = dfm_table_terms_by_doc,
-           size = 1.0, 
-           color = "random-dark"
-)
-```
-
-```{r, echo=FALSE, eval=FALSE}
-tfidf_all <- 
-  quanteda::dfm_tfidf(dfm_terms) %>%
-  quanteda::convert(to = "data.frame")
-colnames(tfidf_all)[1] = "course"
+dev.off()
 ```
