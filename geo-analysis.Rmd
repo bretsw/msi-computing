@@ -64,7 +64,7 @@ state_regions_formatted <-
   state_regions %>%
   mutate(region = ifelse(region == "northeast", 
                          "Northeast",
-                         ifelse(region == "midest", 
+                         ifelse(region == "midwest", 
                                 "Midwest",
                                 ifelse(region == "south-atlantic", 
                                        "South: Atlantic Region",
