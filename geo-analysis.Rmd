@@ -34,9 +34,9 @@ univ_df <-
   univ_df0 %>%
   left_join(msi, by = "instname") %>%
   mutate(msi_type = str_replace_all(fundedtxt, "Currently funded", ""),
-         msi_type = ifelse(grepl("HBCU", msi_type),
+         msi_type = ifelse(grepl("HBCU|HBGI|PBI", msi_type),
                            "HBCU",
-                           ifelse(grepl("HSI", msi_type),
+                           ifelse(grepl("HSI|PPOHA", msi_type),
                                   "HSI",
                                   "Other")
          )
