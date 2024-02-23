@@ -7,12 +7,7 @@ output: html_document
 
 ```{r setup, message=FALSE, warning=FALSE, echo=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(plyr)
 library(tidyverse)
-library(anytime)
-library(lubridate)
-
-library(sf)
 library(ggmap)
 library(usmap)
 ```
@@ -57,7 +52,7 @@ ggmap::register_google(key = Sys.getenv("GOOGLE_API_KEY"))
 ggmap::has_google_key()
 ```
 
-```{r, eval=FALSE}
+```{r}
 coords <- 
   univ_df %>% 
   distinct(instname, .keep_all = TRUE) %>%
