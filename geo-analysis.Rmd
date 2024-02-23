@@ -38,7 +38,7 @@ univ_df <-
                            "HBCU",
                            ifelse(grepl("HSI|PPOHA", msi_type),
                                   "HSI",
-                                  "Other")
+                                  "ANNAPISI")
          )
   )
 ```
@@ -100,7 +100,7 @@ plot_usmap(data = state_regions_formatted,
     alpha = 0.5,
     aes(shape = `MSI Type`)
   ) +
-  scale_shape_manual(values = c(0, 2, 1)) +
+  scale_shape_manual(values = c(1, 0, 2)) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
